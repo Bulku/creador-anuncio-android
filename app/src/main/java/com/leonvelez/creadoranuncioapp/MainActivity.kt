@@ -1,10 +1,14 @@
 package com.leonvelez.creadoranuncioapp
 
+import android.net.Uri
 import android.os.Bundle
+import android.widget.ImageView
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -23,15 +29,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.layout.width
+import androidx.compose.ui.viewinterop.AndroidView
 
 data class AdDraft(
     val format: String = "Banner",
@@ -40,7 +49,8 @@ data class AdDraft(
     val description: String = "",
     val cta: String = "Más información",
     val backgroundStyle: String = "Claro",
-    val buttonStyle: String = "Azul"
+    val buttonStyle: String = "Azul",
+    val imageUri: Uri? = null
 )
 
 class MainActivity : ComponentActivity() {
@@ -59,6 +69,14 @@ fun AdCreatorApp() {
     var currentStep by remember { mutableStateOf(1) }
     var adDraft by remember { mutableStateOf(AdDraft()) }
 
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            adDraft = adDraft.copy(imageUri = uri)
+        }
+    }
+
     when (currentStep) {
         1 -> Step1FormatScreen(
             adDraft = adDraft,
@@ -73,9 +91,14 @@ fun AdCreatorApp() {
             onNext = { currentStep = 3 }
         )
 
-        3 -> Step3StyleScreen(
+        3 -> Step3StyleAndImageScreen(
             adDraft = adDraft,
             onDraftChange = { adDraft = it },
+            onPickImage = {
+                imagePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
             onBack = { currentStep = 2 },
             onNext = { currentStep = 4 }
         )
@@ -180,13 +203,14 @@ fun Step2ContentScreen(
 }
 
 @Composable
-fun Step3StyleScreen(
+fun Step3StyleAndImageScreen(
     adDraft: AdDraft,
     onDraftChange: (AdDraft) -> Unit,
+    onPickImage: () -> Unit,
     onBack: () -> Unit,
     onNext: () -> Unit
 ) {
-    ScreenContainer(title = "Paso 3: Personaliza el estilo") {
+    ScreenContainer(title = "Paso 3: Personaliza estilo e imagen") {
         Text("Color de fondo")
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -195,9 +219,7 @@ fun Step3StyleScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
                     selected = adDraft.backgroundStyle == option,
-                    onClick = {
-                        onDraftChange(adDraft.copy(backgroundStyle = option))
-                    }
+                    onClick = { onDraftChange(adDraft.copy(backgroundStyle = option)) }
                 )
                 Text(option)
             }
@@ -213,13 +235,27 @@ fun Step3StyleScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(
                     selected = adDraft.buttonStyle == option,
-                    onClick = {
-                        onDraftChange(adDraft.copy(buttonStyle = option))
-                    }
+                    onClick = { onDraftChange(adDraft.copy(buttonStyle = option)) }
                 )
                 Text(option)
             }
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Button(onClick = onPickImage, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                if (adDraft.imageUri == null) "Seleccionar imagen"
+                else "Cambiar imagen"
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = if (adDraft.imageUri == null) "No has seleccionado imagen."
+            else "Imagen seleccionada correctamente."
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -273,6 +309,10 @@ fun Step4PreviewScreen(
                 Text("CTA: ${adDraft.cta.ifBlank { "No definido" }}")
                 Text("Fondo: ${adDraft.backgroundStyle}")
                 Text("Botón: ${adDraft.buttonStyle}")
+                Text(
+                    if (adDraft.imageUri == null) "Imagen: no seleccionada"
+                    else "Imagen: seleccionada"
+                )
             }
         }
 
@@ -313,9 +353,7 @@ fun AdPreviewCard(adDraft: AdDraft) {
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
                         .size(52.dp)
@@ -370,20 +408,37 @@ fun AdPreviewCard(adDraft: AdDraft) {
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .background(
-                        color = if (adDraft.backgroundStyle == "Oscuro") Color(0xFF2C2C2C) else Color(0xFFE0E0E0),
-                        shape = RoundedCornerShape(18.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Espacio para imagen o banner",
-                    color = if (adDraft.backgroundStyle == "Oscuro") Color.LightGray else Color.DarkGray
+            if (adDraft.imageUri != null) {
+                AndroidView(
+                    factory = { context ->
+                        ImageView(context).apply {
+                            scaleType = ImageView.ScaleType.CENTER_CROP
+                            clipToOutline = true
+                        }
+                    },
+                    update = { imageView ->
+                        imageView.setImageURI(adDraft.imageUri)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .background(
+                            color = if (adDraft.backgroundStyle == "Oscuro") Color(0xFF2C2C2C) else Color(0xFFE0E0E0),
+                            shape = RoundedCornerShape(18.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Espacio para imagen",
+                        color = if (adDraft.backgroundStyle == "Oscuro") Color.LightGray else Color.DarkGray
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(18.dp))
