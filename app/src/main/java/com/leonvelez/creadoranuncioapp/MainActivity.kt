@@ -1,8 +1,8 @@
 package com.leonvelez.creadoranuncioapp
 
+
 import android.net.Uri
 import android.os.Bundle
-import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -20,8 +20,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,9 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import coil3.compose.AsyncImage
 
 data class AdDraft(
     val format: String = "Banner",
@@ -50,7 +53,8 @@ data class AdDraft(
     val cta: String = "Más información",
     val backgroundStyle: String = "Claro",
     val buttonStyle: String = "Azul",
-    val imageUri: Uri? = null
+    val imageUri: Uri? = null,
+    val imageUrl: String = ""
 )
 
 class MainActivity : ComponentActivity() {
@@ -121,6 +125,13 @@ fun Step1FormatScreen(
     onNext: () -> Unit
 ) {
     ScreenContainer(title = "Paso 1: Elige el formato") {
+        StepHintCard(
+            title = "Lo importante",
+            code = "Se actualiza el estado con adDraft.copy(format = \"Banner\" o \"Native\")"
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text("Selecciona el tipo de anuncio que quieres crear.")
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -151,6 +162,13 @@ fun Step2ContentScreen(
     onNext: () -> Unit
 ) {
     ScreenContainer(title = "Paso 2: Escribe el contenido") {
+        StepHintCard(
+            title = "Lo importante",
+            code = "Cada campo usa adDraft.copy(... = it) para guardar los datos del anuncio."
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         OutlinedTextField(
             value = adDraft.brand,
             onValueChange = { onDraftChange(adDraft.copy(brand = it)) },
@@ -211,6 +229,13 @@ fun Step3StyleAndImageScreen(
     onNext: () -> Unit
 ) {
     ScreenContainer(title = "Paso 3: Personaliza estilo e imagen") {
+        StepHintCard(
+            title = "Lo importante",
+            code = "Puedes usar una imagen local con PickVisualMedia o pegar una URL para cargarla desde internet."
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text("Color de fondo")
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -245,16 +270,32 @@ fun Step3StyleAndImageScreen(
 
         Button(onClick = onPickImage, modifier = Modifier.fillMaxWidth()) {
             Text(
-                if (adDraft.imageUri == null) "Seleccionar imagen"
-                else "Cambiar imagen"
+                if (adDraft.imageUri == null) "Seleccionar imagen local"
+                else "Cambiar imagen local"
             )
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = if (adDraft.imageUri == null) "No has seleccionado imagen."
-            else "Imagen seleccionada correctamente."
+            text = if (adDraft.imageUri == null) "No has seleccionado imagen local."
+            else "Imagen local seleccionada correctamente."
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = adDraft.imageUrl,
+            onValueChange = { onDraftChange(adDraft.copy(imageUrl = it)) },
+            label = { Text("URL de imagen") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Ejemplo: https://sitio.com/imagen.jpg",
+            style = MaterialTheme.typography.bodySmall
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -277,6 +318,13 @@ fun Step4PreviewScreen(
     onRestart: () -> Unit
 ) {
     ScreenContainer(title = "Paso 4: Vista previa del anuncio") {
+        StepHintCard(
+            title = "Lo importante",
+            code = "La preview renderiza todo usando los datos guardados en adDraft."
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
             text = "Así se vería el anuncio creado por el usuario:",
             style = MaterialTheme.typography.bodyMedium
@@ -310,8 +358,13 @@ fun Step4PreviewScreen(
                 Text("Fondo: ${adDraft.backgroundStyle}")
                 Text("Botón: ${adDraft.buttonStyle}")
                 Text(
-                    if (adDraft.imageUri == null) "Imagen: no seleccionada"
-                    else "Imagen: seleccionada"
+                    if (adDraft.imageUri == null && adDraft.imageUrl.isBlank()) {
+                        "Imagen: no seleccionada"
+                    } else if (adDraft.imageUri != null) {
+                        "Imagen: tomada desde archivos"
+                    } else {
+                        "Imagen: cargada desde URL"
+                    }
                 )
             }
         }
@@ -345,6 +398,8 @@ fun AdPreviewCard(adDraft: AdDraft) {
         else -> Color(0xFF1976D2)
     }
 
+    val imageModel: Any? = adDraft.imageUri ?: adDraft.imageUrl.takeIf { it.isNotBlank() }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -352,7 +407,6 @@ fun AdPreviewCard(adDraft: AdDraft) {
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -398,30 +452,26 @@ fun AdPreviewCard(adDraft: AdDraft) {
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = if (adDraft.description.isBlank())
+                text = if (adDraft.description.isBlank()) {
                     "Aquí aparecerá la descripción de tu anuncio para mostrar el mensaje al usuario."
-                else
-                    adDraft.description,
+                } else {
+                    adDraft.description
+                },
                 color = textColor,
                 style = MaterialTheme.typography.bodyMedium
             )
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            if (adDraft.imageUri != null) {
-                AndroidView(
-                    factory = { context ->
-                        ImageView(context).apply {
-                            scaleType = ImageView.ScaleType.CENTER_CROP
-                            clipToOutline = true
-                        }
-                    },
-                    update = { imageView ->
-                        imageView.setImageURI(adDraft.imageUri)
-                    },
+            if (imageModel != null) {
+                AsyncImage(
+                    model = imageModel,
+                    contentDescription = "Imagen del anuncio",
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(160.dp)
+                        .clip(RoundedCornerShape(18.dp)),
+                    contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
@@ -467,6 +517,28 @@ fun AdPreviewCard(adDraft: AdDraft) {
 }
 
 @Composable
+fun StepHintCard(title: String, code: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F6FB))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = code,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
 fun ScreenContainer(
     title: String,
     content: @Composable () -> Unit
@@ -474,6 +546,7 @@ fun ScreenContainer(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.Top
     ) {
